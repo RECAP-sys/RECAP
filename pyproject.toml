@@ -1,0 +1,82 @@
+[project]
+name = "recap"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "APScheduler",
+  "faster-coco-eval>=1.6.0",
+  "grpcio-tools==1.80.0",
+  "grpcio==1.80.0",
+  "huggingface_hub==1.5.0",
+  "imutils",
+  "loguru==0.7.3",
+  "mapcalc==0.2.2",
+  "matplotlib>=3.8",
+  "numpy==2.2.6",
+  "opencv-python==4.11.0.86",
+  "ortools==9.15.6755",
+  "pandas==2.3.3",
+  "Pillow>=12.3.0",
+  "protobuf>=6.33.5",
+  "psutil==7.2.2",
+  "pytest>=9.0.3",
+  "python-docx>=1.2.0",
+  "PyYAML==6.0.3",
+  "requests>=2.33.0",
+  "safetensors>=0.4.5",
+  "rfdetr>=1.6.5",
+  "timm>=1.0.26",
+  "setuptools>=83.0.0",
+  "torch>=2.13.0",
+  "torchmetrics>=1.8.0",
+  "torchlens==2.18.0",
+  "torchvision>=0.28.0",
+  "tqdm>=4.66",
+  "transformers",
+  "ultralytics>=8.4.41",
+  "diffusers>=0.38.0",
+  "lpips>=0.1.4",
+]
+
+[tool.uv.sources]
+torchlens = { path = "torchlens-2.18.0-py3-none-any.whl" }
+
+[project.optional-dependencies]
+integration = [
+  "rfdetr>=1.6.5",
+  "timm>=1.0.26",
+  "torchvision>=0.28.0",
+  "ultralytics>=8.4.41",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+norecursedirs = ["tmp", ".venv", "__pycache__", ".git"]
+markers = [
+  "integration: tests that launch real processes or require heavyweight runtime dependencies",
+]
+filterwarnings = [
+  "ignore:`torch.jit.script` is deprecated.*:DeprecationWarning:torch.jit._script",
+  "ignore:rfdetr\\.util\\..* is deprecated.*:DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = [
+  ".venv",
+  "__pycache__",
+  "grpc_server/message_transmission_pb2.py",
+  "grpc_server/message_transmission_pb2.pyi",
+  "grpc_server/message_transmission_pb2_grpc.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E402"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.16",
+]

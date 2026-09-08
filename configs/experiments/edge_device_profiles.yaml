@@ -1,0 +1,17 @@
+devices:
+  1:
+    label: Workstation
+    hardware: Intel Core Ultra 9 185H
+    marker: o
+  2:
+    label: Jetson Orin NX
+    hardware: NVIDIA Jetson Orin NX 8GB
+    marker: ^
+  3:
+    label: Edge 3 (192.168.66.118)
+    hardware: NVIDIA edge device
+    marker: s
+  4:
+    label: Edge 4 (192.168.66.238)
+    hardware: NVIDIA edge device
+    marker: P

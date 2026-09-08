@@ -1,0 +1,67 @@
+run:
+  run_id: suwon5a_real_weather_scene_test
+  seed: 42
+  output_root: results/drift_detection_validity
+  device: cuda:1
+  num_workers: 1
+
+inference:
+  backend: real
+
+evaluation:
+  class_aware: true
+
+data:
+  frames_per_scene: 24
+  start_margin_seconds: 2.0
+  end_margin_seconds: 2.0
+  scene_videos:
+    - scene_id: rainy
+      scene_label: Rainy
+      video_path: video_data/rainy.mp4
+    - scene_id: snowy
+      scene_label: Snowy
+      video_path: video_data/snowy.mp4
+
+models:
+  student_model: rfdetr_nano
+  teacher_model: rtdetr_x
+  student_checkpoint: null
+  teacher_checkpoint: null
+  confidence_threshold: 0.3
+  iou_threshold: 0.5
+
+split_boundary:
+  enabled: true
+  split_point: null
+  require_recap_split_runtime: true
+
+window:
+  size: 8
+  stride: 8
+  harmful_f1_drop_threshold: 0.10
+  harmful_consecutive_windows: 1
+  harmful_merge_gap_windows: 0
+
+signals:
+  ema_alpha: 0.20
+  eps: 1.0e-8
+  zscore_std_floor: 0.01
+  zscore_clip: null
+  topk_queries: 20
+  use_objectness_weighted_entropy: true
+  full_score_entropy_weight: 0.5
+  full_score_feature_weight: 0.5
+  normalize_by_clean_stats: true
+
+trigger:
+  tolerance_frames: 8
+  early_tolerance_frames: 0
+  trigger_consecutive_windows: 1
+  cooldown_windows: 1
+  rearm_requires_below_threshold: true
+  thresholds:
+    confidence_only_z: 2.0
+    ema_entropy_z: 2.0
+    ema_feature_deviation_z: 2.0
+    full_score_z: 2.0

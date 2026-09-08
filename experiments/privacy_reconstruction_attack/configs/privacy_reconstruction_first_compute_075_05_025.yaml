@@ -1,0 +1,61 @@
+privacy_score_split_points:
+  - name: split_first_compute
+    privacy_leakage_score: auto
+    split_point: first_compute
+  - name: split_score_0_75
+    privacy_leakage_score: 0.75
+    split_point: auto
+  - name: split_score_0_5
+    privacy_leakage_score: 0.5
+    split_point: auto
+  - name: split_score_0_25
+    privacy_leakage_score: 0.25
+    split_point: auto
+
+split_resolution:
+  max_candidates: 0
+  validate_candidates: false
+  require_unique: true
+
+feature_distance:
+  cosine_weight: 1.0
+  cosine_mode: channel
+  nmse_weight: 0.0
+  eps: 1.0e-8
+  tensor_weights: {}
+
+drag_linear_clean:
+  enabled: true
+  checkpoint: stable-diffusion-v1-5/stable-diffusion-v1-5
+  image_size: 384
+  torch_dtype: float32
+  linear_pseudoinverse_regularization: 1.0e-5
+  num_inference_steps: 15
+  guidance_rate: 0.2
+  strength: 0.4
+  eta: 1.0
+  max_grad_norm: 0.02
+  l2_regularization_x: 0.01
+  fallback_seed: null
+  max_samples_per_split: 1
+  log_every_n_steps: 5
+
+whitebox_feature_inversion:
+  enabled: true
+  iterations: 1000
+  learning_rate: 1.0e-2
+  adam_eps: 1.0e-3
+  amsgrad: true
+  init: gray_noise
+  init_noise_std: 0.01
+  tv_weight: 1.0e-4
+  l2_weight: 1.0e-5
+  feature_loss: mse
+  log_every_n_steps: 100
+  max_samples_per_split: 1
+
+metrics:
+  object_iou_threshold: 0.5
+  psnr_norm_max: 40.0
+  lpips_norm_max: 1.0
+  teacher_threshold: null

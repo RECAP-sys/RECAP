@@ -1,0 +1,223 @@
+syntax = "proto3";
+
+service MessageTransmission {
+  // Cloud-side continual learning: edge sends collected frame indices,
+  // cloud retrains the lightweight model and returns updated weights.
+  rpc train_model_request (TrainRequest) returns (TrainReply) {}
+  // Continual-learning bundle upload for the fixed-split pipeline.
+  rpc continual_learning_request (ContinualLearningRequest) returns (ContinualLearningReply) {}
+  // Sharded sample pool exchange without creating a training job.
+  rpc sync_samples (SampleSyncRequest) returns (SampleSyncReply) {}
+  // Async training job submission for edge-triggered continual learning.
+  rpc submit_training_job (SubmitTrainingJobRequest) returns (SubmitTrainingJobReply) {}
+  // Poll async training job status by job_id.
+  rpc get_training_job_status (TrainingJobStatusRequest) returns (TrainingJobStatusReply) {}
+  // Download trained model for a completed async training job.
+  rpc download_trained_model (DownloadTrainedModelRequest) returns (DownloadTrainedModelReply) {}
+  // Report that an edge has applied a model update.
+  rpc report_edge_model_version (ReportEdgeModelVersionRequest) returns (ReportEdgeModelVersionReply) {}
+  // Cancel a queued or running training job.
+  rpc cancel_training_job (CancelTrainingJobRequest) returns (CancelTrainingJobReply) {}
+  // Resource-aware CL trigger: edge queries cloud resource utilisation.
+  rpc query_resource (ResourceRequest) returns (ResourceReply) {}
+  // Bandwidth estimation: edge sends a small payload, cloud echoes it.
+  rpc bandwidth_probe (BandwidthProbeRequest) returns (BandwidthProbeReply) {}
+  // Offline experiment artifact archival. This is not method communication.
+  rpc UploadExperimentResult (UploadExperimentResultRequest)
+      returns (UploadExperimentResultResponse) {}
+}
+
+enum TrainingJobType {
+  TRAINING_JOB_TYPE_UNSPECIFIED = 0;
+  TRAINING_JOB_TYPE_FULL_FRAME = 1;
+  reserved 2;
+  TRAINING_JOB_TYPE_CONTINUAL_LEARNING = 3;
+}
+
+// Continual learning messages
+message TrainRequest {
+  int64 edge_id = 1;
+  repeated int64 frame_indices = 2;
+  // Cloud-owned working directory hint; server resolves it inside workspace_root.
+  string cache_path = 3;
+  reserved 4;
+  bytes payload_zip = 5;
+}
+
+message TrainReply {
+  bool success = 1;
+  // Base-64 encoded PyTorch state-dict bytes of the retrained lightweight model
+  string model_data = 2;
+  string message = 3;
+}
+
+message ContinualLearningRequest {
+  string protocol_version = 1;
+  int64 edge_id = 2;
+  string cache_path = 3;
+  reserved 4;
+  bool send_low_conf_features = 5;
+  bytes payload_zip = 6;
+}
+
+message ContinualLearningReply {
+  bool success = 1;
+  string model_data = 2;
+  string message = 3;
+  string protocol_version = 4;
+}
+
+message SampleSyncRequest {
+  string protocol_version = 1;
+  int64 edge_id = 2;
+  string model_id = 3;
+  string model_version = 4;
+  string split_config_id = 5;
+  string sync_type = 6;
+  bytes payload_zip = 7;
+}
+
+message SampleSyncReply {
+  bool success = 1;
+  string message = 2;
+  int64 committed_samples = 3;
+}
+
+message SubmitTrainingJobRequest {
+  string protocol_version = 1;
+  int64 edge_id = 2;
+  string request_id = 3;
+  TrainingJobType job_type = 4;
+  string cache_path = 5;
+  reserved 6;
+  bool send_low_conf_features = 7;
+  repeated int64 frame_indices = 8;
+  reserved 9, 10;
+  bytes payload_zip = 11;
+  // Model version at the time of submission (for stale detection)
+  string base_model_version = 12;
+}
+
+message SubmitTrainingJobReply {
+  bool accepted = 1;
+  string job_id = 2;
+  string status = 3;
+  int64 queue_position = 4;
+  string message = 5;
+}
+
+message TrainingJobStatusRequest {
+  int64 edge_id = 1;
+  string job_id = 2;
+}
+
+message TrainingJobStatusReply {
+  bool found = 1;
+  string job_id = 2;
+  int64 edge_id = 3;
+  string status = 4;
+  int64 queue_position = 5;
+  string message = 6;
+  string request_id = 7;
+  TrainingJobType job_type = 8;
+  bool result_available = 9;
+  int64 submitted_at_ms = 10;
+  int64 started_at_ms = 11;
+  int64 finished_at_ms = 12;
+  string protocol_version = 13;
+  string base_model_version = 14;
+  string result_model_version = 15;
+  string worker_id = 16;
+}
+
+message DownloadTrainedModelRequest {
+  int64 edge_id = 1;
+  string job_id = 2;
+}
+
+message DownloadTrainedModelReply {
+  bool success = 1;
+  string job_id = 2;
+  string status = 3;
+  string model_data = 4;
+  string message = 5;
+  string protocol_version = 6;
+  string result_model_version = 7;
+}
+
+message ReportEdgeModelVersionRequest {
+  int64 edge_id = 1;
+  string model_id = 2;
+  string model_version = 3;
+}
+
+message ReportEdgeModelVersionReply {
+  bool success = 1;
+  string message = 2;
+}
+
+// Cancel a queued or running training job
+message CancelTrainingJobRequest {
+  int64 edge_id = 1;
+  string job_id = 2;
+}
+
+message CancelTrainingJobReply {
+  bool cancelled = 1;
+  string message = 2;
+}
+
+// Resource-aware CL trigger: cloud resource query
+message ResourceRequest {
+  int64 edge_id = 1;
+}
+
+message ResourceReply {
+  double cpu_utilization = 1;      // [0.0, 1.0]
+  double gpu_utilization = 2;      // [0.0, 1.0]
+  double memory_utilization = 3;   // [0.0, 1.0]
+  int64 train_queue_size = 4;      // current training queue depth
+  int64 max_queue_size = 5;        // max training queue capacity
+}
+
+// Bandwidth probe: edge sends payload, cloud echoes back
+message BandwidthProbeRequest {
+  string payload = 1;
+}
+
+message BandwidthProbeReply {
+  string payload = 1;
+}
+
+message ExperimentResultArtifact {
+  string experiment_id = 1;
+  string scenario_slug = 2;
+  int32 edge_count = 3;
+  int32 repeat = 4;
+  string run_id = 5;
+  string method = 6;
+  int32 edge_id = 7;
+  string relative_path = 8;
+  bytes content = 9;
+  int64 size_bytes = 10;
+  string sha256 = 11;
+  string content_type = 12;
+  bool is_final = 13;
+}
+
+message UploadExperimentResultRequest {
+  string experiment_id = 1;
+  string scenario_slug = 2;
+  int32 edge_count = 3;
+  int32 repeat = 4;
+  string run_id = 5;
+  string method = 6;
+  int32 edge_id = 7;
+  repeated ExperimentResultArtifact artifacts = 8;
+}
+
+message UploadExperimentResultResponse {
+  bool accepted = 1;
+  string message = 2;
+  repeated string stored_paths = 3;
+}

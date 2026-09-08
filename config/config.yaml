@@ -1,0 +1,370 @@
+experiment_run:
+ experiment_id: suwon5a_weather_yolo26
+ scenario: snowy
+ video_path: ./video_data/snowy.mp4
+ max_count: 5000
+ edge_count: 1
+ repeat: 1
+
+experiment_results:
+ enabled: true
+ upload_enabled: true
+ root_dir: results/experiments
+ local_root_dir: cache/experiment_results
+ max_artifact_bytes: 268435456
+
+client:
+ source:
+  rtsp:
+   flag: False
+   account: your account
+   password: your password
+   ip_address: you camera ip
+   channel: 1
+  teacher_replay:
+   save_sampled_frames: false
+   jpeg_quality: 90
+   queue_size: 64
+   archive_chunk_max_bytes: 67108864
+ # the frame interval
+ interval: 1
+ # the difference feature (pixel, edge, area, corner).
+ feature: edge
+ # the difference flag and thresh
+ diff_flag: True
+ diff_thresh: 0.0004
+ # the queue maxsize
+ local_queue_maxsize: 10
+ # Default online mode drops CL samples when async queues are full.
+ # Enable only for strict offline experiments that may block after task completion.
+ strict_sample_collection: false
+ # Keep OpenCV's JPEG/diff workers from oversubscribing the CPU alongside
+ # Torch split inference. The library default used 22 threads on a 16-core host.
+ opencv_num_threads: 1
+ # Batch JSONL flushes to keep per-frame display latency free of fsync-style overhead.
+ flush_every_n_frames: 30
+ # Emit detailed performance logs periodically; JSONL still records every sampled frame.
+ performance_log_every_n_frames: 30
+ # the max wait time
+ wait_thresh: 100
+ frame_cache_maxsize: 100
+ lightweight: yolo26n
+ # Explicit custom YOLO26 checkpoint. Keep model name as the architecture
+ # (yolo26n) and point weights_path at your trained checkpoint.
+ weights_path: ./model_management/models/yolo26n.pt
+ # Optional display names for custom zero-based checkpoints. Leave empty for
+ # COCO models, or fill in the exact training-class order, e.g. ["car", "bus"].
+ class_names: ["unidentified", "others", "pedestrian", "micromobility", "car", "bus", "small truck", "truck"]
+ tinynext_input_size: 640
+ # edge-side final display threshold; boxes below this score are not returned
+ final_detection_threshold: 0.6
+ # Supported model names (see model_management/model_zoo.py):
+ #   RetinaNet:    retinanet_resnet50_fpn
+ #   FCOS:         fcos_resnet50_fpn
+ #   YOLOv5:       yolov5n, yolov5s, yolov5m, yolov5l, yolov5x
+ #   YOLOv8:       yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+ #   YOLOv10:      yolov10n, yolov10s, yolov10m, yolov10l, yolov10x
+ #   YOLO11:       yolo11n, yolo11s, yolo11m, yolo11l, yolo11x
+ #   YOLO12:       yolo12n, yolo12s, yolo12m, yolo12l, yolo12x
+ #   YOLO26:       yolo26n, yolo26s, yolo26m, yolo26l, yolo26x
+ #   DETR:         detr_resnet50, detr_resnet101, conditional_detr_resnet50
+ #   RF-DETR:      rfdetr_nano, rfdetr_small, rfdetr_medium, rfdetr_large
+ #   RT-DETR:      rtdetr_l, rtdetr_x
+ #   TinyNeXt:     tinynext_s, tinynext_m
+ # server_ip
+ server_ip: '192.168.66.205:50051'
+ # edge nodes
+ edge_id: 1
+ feature_upload:
+  storage_format: "safetensors_shard"
+  shard_max_samples: 64
+  shard_dtype: null # e.g. float16; null to inherit model dtype
+  # Every training trigger already carries 128 teacher-needed raw samples and
+  # the cloud rebuilds their boundary features. Continuously syncing trusted
+  # feature tensors is therefore redundant for this profile and can exceed the
+  # memory available on Jetson-class edges while serializing large shards.
+  sync_high_quality: false
+  include_index_json: true
+  include_meta_json: true
+ continual_learning:
+  # Diagnostics-only internal ids/hash/path logging. Default edge logs stay experiment-readable.
+  log_internal_ids: false
+ # retrain
+ retrain:
+  flag: True
+  # Grace window for async cloud job status polling. A submitted job can be
+  # briefly invisible if the cloud endpoint reconnects or routes to a different
+  # worker; the edge keeps polling within this window before treating it as lost.
+  status_not_found_grace_sec: 60
+  cache_path: './cache'
+  collect_num: 8
+  # JPEG quality for raw CL samples. Lowering quality reduces upload bytes
+  # without changing resolution.
+  raw_jpeg_quality: 82
+  min_low_quality_samples: 80
+ # Entropy-based edge pseudo-label trust classification.
+ sample_quality:
+  enabled: true
+  output_entropy:
+   window_size: 256
+   percentile: 25.0
+   warmup_samples: 20
+   min_detection_confidence: 0.85
+  boundary_feature_entropy:
+   max_elements: 4096
+   ema_decay: 0.95
+   deviation_threshold: 1.5
+   min_std: 1.0e-4
+   # Prevent a near-zero early variance from turning harmless numerical noise
+   # into a permanent anomaly, and do not let confirmed outliers move the baseline.
+   relative_std_floor: 0.02
+   update_on_anomaly: false
+   warmup_samples: 20
+  # Bootstrap one complete cloud training window after startup, then retain only
+  # one in four ordinary low-quality observations after the first model update.
+  # All observations still feed drift detection.
+  teacher_sampling:
+   enabled: true
+   initial_stride: 1
+   base_stride: 4
+   critical_stride: 2
+   critical_confidence: 0.40
+   critical_output_entropy_ratio: 1.50
+   critical_feature_deviation: 6.0
+   retain_empty_predictions: false
+  eps: 1.0e-8
+  persist_debug_stats: false
+ # Sliding-window drift state. Drift is not stored as a sample category.
+ window_drift:
+  window_size: 100
+  min_window_size: 60
+  # With the conservative 25th-percentile trust gate, a high low-quality rate is
+  # expected. Drift therefore requires a sustained severe rate, not merely >30%.
+  low_quality_rate_threshold: 0.80
+  persistence_windows: 2
+  # Persistence counts spaced checkpoints rather than adjacent overlapping frames.
+  evaluation_stride: 50
+  recovery_rate_threshold: 0.65
+  recovery_windows: 2
+  # Independent precision guard: a smaller fraction of severe anomalies can
+  # confirm drift even when the aggregate low-quality rate remains below 0.80.
+  severe_anomaly_rate_threshold: 0.20
+  recovery_severe_anomaly_rate: 0.10
+  critical_confidence: 0.40
+  critical_output_entropy_ratio: 1.50
+  critical_feature_deviation: 6.0
+
+ # Virtual queues constrain normalized pressure-weighted costs, not raw GPU
+ # seconds or bytes:
+ #   Q_cloud  — average normalized cloud cost ≤ lambda_cloud
+ #   Q_bw     — average normalized link cost  ≤ lambda_bw
+ resource_aware_trigger:
+  enabled: True
+  # Only model version 0 may bootstrap once enough teacher-needed samples have
+  # accumulated. Updated models still require persistent drift confirmation.
+  bootstrap_without_drift: True
+  probe_interval_sec: 5.0
+  probe_timeout_sec: 3.0
+  bandwidth_probe_size_bytes: 65536
+  # --- Teacher-needed sample urgency controller ---
+  # Conservative profile: delay CL until enough evidence accumulates and let
+  # the Q_cloud/Q_bw penalties suppress repeated training decisions.
+  V: 10.0                # skip-training penalty multiplier; lower is more conservative in the current min-cost implementation
+  K_p: 0.6              # PD proportional gain
+  K_d: 0.2              # PD derivative gain
+  # --- Two-queue budget constraints ---
+  lambda_cloud: 0.5     # avg cloud-cost budget per round [0,1]
+  lambda_bw: 0.5        # avg bandwidth budget per round [0,1]
+  # --- Queue importance weights ---
+  w_cloud: 1.0           # weight for cloud-cost queue
+  w_bw: 1.0              # weight for bandwidth queue
+  feature_cloud_cost_factor: 0.5  # raw+feature cloud cost relative to raw-only
+  # This is the number of retained teacher-needed samples, not total cached samples.
+  # The bootstrap bundle fills the cloud's 128-sample training window by itself,
+  # avoiding both undersized requests and dependence on large feature uploads.
+  min_training_samples: 128
+  min_training_samples_by_model:
+   rfdetr_nano: 64
+  # The cloud trains on exactly 128 recent samples. Do not upload older samples
+  # that would be discarded immediately when the recent window is truncated.
+  max_training_samples: 128
+  max_training_samples_by_model:
+   rfdetr_nano: 64
+  cooldown_decisions: 75
+  min_training_interval_sec: 180
+  drift_bonus: 0.20
+  upload_time_budget_sec: 5.0
+  # CL bundle byte budget. With a bandwidth estimate, the edge caps the
+  # bundle at min(max_bytes, max(min_bytes, mbps * target_sec / 8 * 1e6)).
+  bundle_max_bytes: 134217728
+  bundle_min_bytes: 8388608
+  bundle_target_upload_sec: 45.0
+ # Split learning for continual learning
+ # When enabled, backbone features are extracted and cached on the edge.
+ # Only drift-moment samples are annotated by the cloud's large model;
+ # non-drift samples use edge pseudo-labels for training.
+ # The cloud trains only the server-side layers (rpn + roi_heads)
+ # on the intermediate features, reducing annotation cost.
+ split_learning:
+  enabled: True
+  fixed_split:
+   privacy_leakage_upper_bound: 1.0e-6
+   max_layer_freezing_ratio: 0.75
+   validate_candidates: True
+   validation_batches: [1]
+   max_boundary_count: 8
+   max_payload_bytes: 33554432
+   # This 16-core deployment benchmarks most consistently at 12 threads.
+   inference_num_threads: 12
+   privacy_leakage_epsilon: 1.0e-12
+
+server:
+ server_id: 0
+ golden: rtdetr_x
+ # lightweight model used to generate fine-tuned weights for the edge
+ edge_model_name: yolo26n
+ # Cloud-side starting point for retraining the edge model; golden uses server.golden.
+ weights_path: ./model_management/models/yolo26n.pt
+ tinynext_input_size: 640
+ # gRPC listen address for the cloud server
+ listen_address: "[::]:50051"
+ # Number of gRPC worker threads for public edge RPCs.
+ grpc_max_workers: 16
+ # cloud-owned workspace used for uploaded retraining bundles
+ workspace_root: "./cache/server_workspace"
+ edge_affine_workers:
+  enabled: true
+  mode: edge_affine_single_gpu_mps
+  edge_workers:
+   assignment: one_worker_per_edge
+   lazy_start: true
+   lazy_cuda_init: true
+   max_workers: auto
+   idle_timeout_sec: 900
+   worker_base_port: 56000
+   workspace_root: "./cache/server_workspace/workers"
+  mps:
+   enabled: true
+   auto_start: false
+   cuda_visible_devices: "0"
+   pipe_directory: /tmp/nvidia-mps
+   log_directory: /tmp/nvidia-mps-log
+   # Do not impose a fixed SM quota per worker; MPS shares compute among all
+   # jobs admitted by the GPU-memory lease.
+   active_thread_percentage: 100
+  gpu_lease:
+   enabled: true
+   device: "cuda:0"
+   memory_usage_threshold: 0.85
+   reserve_memory_gb: 4
+   # Admit as many edge jobs as the estimated aggregate GPU-memory budget fits.
+   # Queue only when the next job would exceed the configured memory threshold.
+   max_active_gpu_workers: memory_only
+   # After removing the per-worker teacher (~1 GB resident) and keeping cached
+   # boundary features on CPU (~0.69 GB saved), the measured 8.1 GB low peak
+   # maps to about 6.4 GB per training worker. Keep margin while allowing three
+   # initial workers inside the memory-only budget; observed peaks adapt later.
+   default_estimated_job_memory_gb: 7.25
+   adaptive_peak_memory_estimation: true
+   lease_ttl_sec: 120
+   heartbeat_interval_sec: 10
+   # One process-shared RT-DETR-X remains resident for all edge workers.
+   # Reserve its measured batch-8 peak once instead of charging every job.
+   teacher_reserved_memory_gb: 5
+   teacher_gpu_policy: reserved_budget
+  worker:
+   max_concurrent_jobs: 1
+   startup_timeout_sec: 30
+   startup_max_retries: 2
+   request_timeout_sec: 600
+   healthcheck_interval_sec: 10
+ #the queue maxsize
+ local_queue_maxsize: 10
+ # the max wait time
+ wait_thresh: 10
+ # continual learning settings
+ continual_learning:
+  num_epoch: 30
+  training_frame_count: 128
+  # Cloud traces the fixed split runtime with a small batch to build a
+  # dynamic-batch TorchLens native template; reconstruction/training use batch_size.
+  trace_batch_size: 1
+  # Development-only smoke validation for TorchLens dynamic-batch suffix training.
+  fixed_split_runtime_smoke_validate: false
+  # Development-only detailed key/hash/signature diagnostics. Default runtime logs stay concise.
+  fixed_split_runtime_diagnostics: false
+  # Diagnostics-only internal ids/hash/path logging. Default cloud logs stay experiment-readable.
+  log_internal_ids: false
+  # Configured upper bound; RF-DETR small rounds shrink this toward the
+  # target step count and retry at 16 if CUDA runs out of memory.
+  batch_size: 16
+  feature_cache_mode: auto
+  feature_cache:
+   view_source: recent_training_window
+   materialization_mode: direct_ref
+   view_root_dir: "./cache/cloud_training_views"
+   store_root_dir: "./cache/cloud_feature_shards"
+   shard_root_dir: "./cache/cloud_feature_shards"
+   storage_format: "safetensors_shard"
+   accepted_storage_formats:
+    - "safetensors_shard"
+    - "npy_memmap_shard"
+   shard_max_samples: 64
+   shard_dtype: null
+   payload_cache_enabled: true
+   payload_cache_scope: "active_pool"
+   payload_cache_device: "cpu"
+   payload_cache_max_cpu_bytes: 4294967296
+   payload_cache_max_gpu_bytes: 1073741824
+   pin_memory: true
+   non_blocking_transfer: true
+   validate_refs: true
+   deep_validate_feature_payload: false
+   deep_validate_sample_rate: 0
+   feature_rebuild_batch_size: 16
+   # Keep only shards reachable from the recent window and the newest views.
+   gc_enabled: true
+   gc_dry_run: false
+   gc_max_live_generations: 3
+  proxy_eval_interval_rounds: 10
+  proxy_eval_patience: 2
+  proxy_eval_min_delta: 0.002
+  proxy_eval_max_samples: 128
+  proxy_eval_validation_fraction: 0.2
+  proxy_eval_max_dets: 500
+  # YOLO showed cross-round forgetting on the rainy stream. Keep a cloud-only
+  # reservoir and mix 25% older anchors into each 128-sample training window;
+  # this does not add edge uploads. RF-DETR keeps the latest-only policy that
+  # performed best in the snowy experiment.
+  training_replay_fraction: 0.0
+  training_replay_fraction_by_model:
+   yolo26n: 0.25
+  training_replay_retention_multiplier: 4
+  # Match the edge-side model profile: RF-DETR adapts reliably from 64 samples,
+  # while YOLO retains the default 128-sample window.
+  training_frame_count_by_model:
+   rfdetr_nano: 64
+  # RF-DETR fixed-split jobs shrink the effective runtime batch size toward
+  # this many optimizer steps per outer round so small bundles do not collapse
+  # into a single heavily padded update.
+  rfdetr_fixed_split_target_steps_per_round: 4
+  max_concurrent_jobs: 1
+  # Cloud-side teacher threshold used only for GT annotation during
+  # continual learning. Lower values recover more small/far objects but
+  # may introduce noisier pseudo-GT.
+  teacher_annotation_threshold: 0.4
+  teacher_annotation:
+   async_enabled: true
+   cache_enabled: true
+   # A training request must wait for its already-submitted teacher batches. A
+   # two-second timeout previously converted a valid request into a redundant retry.
+   wait_timeout_sec: 30
+   # RT-DETR-X teacher batches of 32 reached 17-22 GB per worker and caused
+   # concurrent OOM retries. Eight preserves the same labels and samples while
+   # bounding transient activation memory for multi-edge training.
+   worker_batch_size: 8
+   worker_max_queue_size: 4096
+   worker_max_retries: 2
+   oom_retry_enabled: true
+   min_worker_batch_size: 1
+   cache_root_dir: "./cache/teacher_label_cache"
